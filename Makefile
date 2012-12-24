@@ -1,9 +1,9 @@
 CXX       = g++
 CXXFLAGS  = -std=c++11 -Wall -Wshadow -Wextra
 DEBUG     =
-HEADERS   = icmp.h tcp.h log.h
-OBJS      = icmp.o tcp.o log.o
-CPPS      = icmp.cpp tcp.cpp log.cpp snd.cpp rcv.cpp
+HEADERS   = icmp.h socket.h log.h
+OBJS      = icmp.o socket.o log.o
+CPPS      = icmp.cpp socket.cpp log.cpp snd.cpp rcv.cpp
 TARGET    = snd rcv
 #TARGET    =
 
