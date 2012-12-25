@@ -11,16 +11,40 @@
 
 using std::map;
 
+const int sizeof_buffer = 2048;
+
 int icmp;
 map<int, uint32_t> fd_port;
+map<uint32_t, int> port_fd;
+
+void ircv(uint32_t port, void *buf, size_t len) {
+    __log;
+
+    int fd = port_fd[port];
+
+    ssize_t sent = send(fd, buf, len, 0);
+    if (sent < 0)
+        throw logger.errmsg("Failed to send data to fd %d", fd);
+
+}
+
+void iclose(uint32_t port) {
+    __log;
+
+    close(port_fd[port]);
+    fd_port.remove(port_fd[port]);
+    port_fd.remove(port);
+}
 
 int main(int argc, char *argv[]) {
+    __log;
+
     const char *target;
     short port;
 
     if (argc < 3) {
         puts("Usage: ./snd target listen_port");
-        puts("Defaulted to ptt.cc, listening at 5000");
+        logger.print("Defaulted to ptt.cc, listening at 5000");
         target = "ptt.cc";
         port = 5000;
     } else {
@@ -35,22 +59,39 @@ int main(int argc, char *argv[]) {
 
     sock_watch(icmp);
 
-    socke_accept = [&fd_port](int fd, sockaddr_in addr) {
+    socke_accept = [&fd_port, &port_fd](int fd, sockaddr_in addr) {
+        __log;
+
         sock_watch(fd);
         fd_port[fd] = icmp_create(target, 23);
+        port_fd[fd_port[fd]] = fd;
+
+        logger.print("New connection from %d", ntohs(addr.sin.port));
     };
 
-    socke_rcv = [&fd_port](int fd) {
+    empty_func = [](uint32_t, const char*) {}
+
+    socke_rcv = [&fd_port, &port_fd](int fd) {
+        __log;
+
+        char buffer[sizeof_buffer];
         if (fd == icmp) {
-            icmp_rcv();
+
+            icmp_rcv(icmp, ircv, empty_func, iclose);
+
         } else {
 
+            ssize_t recved = recv(fd, &buffer, sizeof_buffer, 0);
+            if (recved < 0) {
+                throw logger.errmsg("Error receving data from port %d", fd_port[fd]);
+            } else if (recved != 0) {
+                icmp_snd(icmp, fd_port[fd], buffer, recved);
+            } else {
+                icmp_close(fd_port[fd]);
+                close(fd);
+            }
+
         }
-        // if fd is not icmp...
-        //   recv...
-        //   icmp_snd...
-        // else
-        //   icmp_rcv...
     };
 
     sock_loop();
