@@ -1,3 +1,4 @@
+// TODO: proxy server address (currently 0.0.0.0)
 #include <cstdio>
 #include <cstdint>
 #include <map>
@@ -15,11 +16,11 @@ using std::map;
 
 const int sizeof_buffer = 2048;
 
-int icmp;
+raw_t icmp;
 map<int, uint32_t> fd_port;
 map<uint32_t, int> port_fd;
 
-void ircv(uint32_t port, void *buf, size_t len) {
+void ircv(sockaddr_in, uint16_t, uint32_t port, void *buf, size_t len) {
     __log;
 
     int fd = port_fd[port];
@@ -30,9 +31,9 @@ void ircv(uint32_t port, void *buf, size_t len) {
 
 }
 
-auto empty_func = [](uint32_t, const char*) {};
+auto empty_func = [](sockaddr_in, uint16_t, uint32_t, const char*, uint16_t) {};
 
-void iclose(uint32_t port) {
+void iclose(sockaddr_in, uint16_t, uint32_t port) {
     __log;
 
     close(port_fd[port]);
@@ -56,18 +57,18 @@ int main(int argc, char *argv[]) {
         port = (short) atoi(argv[2]);
     }
 
-    icmp = icmp_socket();
+    icmp = icmp_socket("0.0.0.0", 0); // send ping request
 
     sock_init();
     sock_listen(port); /* for example */
 
-    sock_watch(icmp);
+    sock_watch(icmp.fd);
 
     socke_accept = [target](int fd, sockaddr_in addr) {
         __log;
 
         sock_watch(fd);
-        fd_port[fd] = icmp_create(target, 23);
+        fd_port[fd] = icmp_create(icmp, target, 23);
         port_fd[fd_port[fd]] = fd;
 
         logger.print("New connection from %d", ntohs(addr.sin_port));
@@ -78,7 +79,7 @@ int main(int argc, char *argv[]) {
         __log;
 
         char buffer[sizeof_buffer];
-        if (fd == icmp) {
+        if (fd == icmp.fd) {
 
             icmp_rcv(icmp, ircv, empty_func, iclose);
 
@@ -90,7 +91,7 @@ int main(int argc, char *argv[]) {
             } else if (recved != 0) {
                 icmp_snd(icmp, fd_port[fd], buffer, recved);
             } else {
-                icmp_close(fd_port[fd]);
+                icmp_close(icmp, fd_port[fd]);
                 close(fd);
             }
 
