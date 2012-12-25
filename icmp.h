@@ -22,12 +22,12 @@ void icmp_close(const uint32_t port);
 
 /********************************************************
  ********************************************************/
-size_t icmp_snd(uint32_t port, const void* buf, const size_t len);
+size_t icmp_snd(int icmp, uint32_t port, const void* buf, const size_t len);
 
 /********************************************************
  ********************************************************/
-void icmp_rcv(
-        function<void(void*, size_t)> ircv,
+void icmp_rcv(int icmp,
+        function<void(uint32_t, void*, size_t)> ircv,
         function<void(uint32_t, const char*)> iaccept,
         function<void(uint32_t)> iclose);
 
