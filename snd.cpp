@@ -2,12 +2,14 @@
 #include <cstdint>
 #include <map>
 
+#include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 
 #include "socket.h"
 #include "icmp.h"
+#include "log.h"
 
 using std::map;
 
@@ -28,12 +30,14 @@ void ircv(uint32_t port, void *buf, size_t len) {
 
 }
 
+auto empty_func = [](uint32_t, const char*) {};
+
 void iclose(uint32_t port) {
     __log;
 
     close(port_fd[port]);
-    fd_port.remove(port_fd[port]);
-    port_fd.remove(port);
+    fd_port.erase(port_fd[port]);
+    port_fd.erase(port);
 }
 
 int main(int argc, char *argv[]) {
@@ -59,17 +63,16 @@ int main(int argc, char *argv[]) {
 
     sock_watch(icmp);
 
-    socke_accept = [&fd_port, &port_fd](int fd, sockaddr_in addr) {
+    socke_accept = [target, &fd_port, &port_fd](int fd, sockaddr_in addr) {
         __log;
 
         sock_watch(fd);
         fd_port[fd] = icmp_create(target, 23);
         port_fd[fd_port[fd]] = fd;
 
-        logger.print("New connection from %d", ntohs(addr.sin.port));
+        logger.print("New connection from %d", ntohs(addr.sin_port));
     };
 
-    empty_func = [](uint32_t, const char*) {}
 
     socke_rcv = [&fd_port, &port_fd](int fd) {
         __log;

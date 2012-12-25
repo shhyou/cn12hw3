@@ -16,7 +16,6 @@ void sock_init() {
     __log;
 
     socke_accept = [](int, sockaddr_in) {};
-    socke_closed = [](int) {};
     socke_rcv = [](int) {};
 
 
@@ -33,7 +32,7 @@ void sock_final() {
 void sock_listen(unsigned short port) {
     __log;
 
-    if (listenfd = socket(AF_INET, SOCK_STREAM, 0) < 0)
+    if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         throw logger.errmsg("canot create socket QQ");
 
     struct sockaddr_in server_address;
@@ -57,7 +56,7 @@ void sock_watch(int fd) {
     event.events = EPOLLIN;
     event.data.fd = fd;
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event) < 0)
-        throw logger.errmgs("Cannot add fd to epoll");
+        throw logger.errmsg("Cannot add fd to epoll");
 }
 
 void sock_unwatch(int fd) {
@@ -67,7 +66,7 @@ void sock_unwatch(int fd) {
     event.events = EPOLLIN;
     event.data.fd = fd;
     if (epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, &event) < 0)
-        throw logger.errmgs("Cannot remove fd from epoll");
+        throw logger.errmsg("Cannot remove fd from epoll");
 }
 
 void sock_loop() {
@@ -92,7 +91,7 @@ void sock_loop() {
                 socklen_t length = sizeof(client_address);
                 int connfd = accept(listenfd, (struct sockaddr*) &client_address, &length);
                 if (connfd < 0)
-                    throw logger.errmgs("Cannot accept connection");
+                    throw logger.errmsg("Cannot accept connection");
 
                 socke_accept(connfd, client_address);
                 socke_rcv(connfd);
