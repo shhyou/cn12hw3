@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
 
     sock_watch(icmp);
 
-    socke_accept = [target, &fd_port, &port_fd](int fd, sockaddr_in addr) {
+    socke_accept = [target](int fd, sockaddr_in addr) {
         __log;
 
         sock_watch(fd);
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
     };
 
 
-    socke_rcv = [&fd_port, &port_fd](int fd) {
+    socke_rcv = [](int fd) {
         __log;
 
         char buffer[sizeof_buffer];
