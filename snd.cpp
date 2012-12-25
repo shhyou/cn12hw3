@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
         port = (short) atoi(argv[2]);
     }
 
-    icmp = icmp_socket("0.0.0.0", 0); // send ping request
+    icmp = icmp_socket("0.0.0.0", 8); // send ping request
 
     sock_init();
     sock_listen(port); /* for example */
