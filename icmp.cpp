@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <cassert>
 
+#include <string>
+
 #include <unistd.h>
 
 #include <sys/socket.h>
@@ -22,6 +24,8 @@
 #define ICMP_MAGIC 0x514B1E55  // tmt514's BlESS
 
 #define ICMP_LEN 512
+
+using std::string;
 
 /* port == 0 for control messages */
 
@@ -109,6 +113,37 @@ void icmp_sendto(raw_t icmp, pkt_t& pkt) {
         throw logger.errmsg("icmp_create, sendto");
 }
 
+void icmp_recvfrom(raw_t icmp, sockaddr_in& sin, uint16_t &echoid, pkt_t &pkt) {
+    __log;
+
+    struct icmp_t {
+        iphdr ip;
+        icmphdr hdr;
+        pkt_t pkt;
+    } data;
+    socklen_t len = sizeof(sin);
+
+    ssize_t rcv = recvfrom(icmp.fd, &data, sizeof(data), 0, (sockaddr*)&sin, &len);
+
+    if (rcv < 0)
+        throw logger.errmsg("recvfrom");
+
+    if (data.hdr.type != (icmp.sndtype^8))
+        logger.raise("not ping %s", icmp.sndtype == 0 ? "reply" : "request");
+
+    if (icmp.sndtype == 0) /* echo reply */
+        if (data.hdr.un.echo.id != getpid())
+            logger.raise("not my pid");
+
+    echoid = data.hdr.un.echo.id;
+    pkt = data.pkt;
+
+    logger.print("ping %s, echo id = %u, seq = %u",
+            icmp.sndtype == 0 ? "reply" : "request",
+            (uint32_t)data.hdr.un.echo.id,
+            (uint32_t)data.hdr.un.echo.sequence);
+}
+
 raw_t icmp_socket(const char *ip, uint8_t sndtype) {
     __log;
 
@@ -158,5 +193,31 @@ void icmp_rcv(raw_t icmp,
         function<void(sockaddr_in, uint16_t, uint32_t, void*, size_t)> ircv,
         function<void(sockaddr_in, uint16_t, uint32_t, const char*, uint16_t)> iaccept,
         function<void(sockaddr_in, uint16_t, uint32_t)> iclose) {
+    __log;
+    
+    try {
+        sockaddr_in sin;
+        pkt_t pkt;
+        uint16_t echoid;
+
+        icmp_recvfrom(icmp, sin, echoid, pkt);
+        unpkt_magic(pkt);
+
+        if (pkt.port == 0) { /* control message */
+            if (pkt.load.ctl.type == ICMP_CREATE) {
+                iaccept(sin, echoid, pkt.load.ctl.ctlport,
+                        (const char*)pkt.load.ctl.dstname,
+                        pkt.load.ctl.dstport);
+            } else if (pkt.load.ctl.type == ICMP_CLOSE) {
+                iclose(sin, echoid, pkt.load.ctl.ctlport);
+            } else {
+                logger.raise("unknown control message");
+            }
+        } else { /* normal message */
+            ircv(sin, echoid, pkt.port, pkt.load.msg.data, pkt.load.msg.len);
+        }
+    } catch (const string& e) {
+        logger.eprint("icmp: %s", e.c_str());
+    }
 }
 
