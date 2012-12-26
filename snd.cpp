@@ -1,4 +1,3 @@
-// TODO: proxy server address (currently 0.0.0.0)
 #include <cstdio>
 #include <cstdint>
 #include <map>
@@ -44,20 +43,20 @@ void iclose(sockaddr_in, uint16_t, uint32_t port) {
 int main(int argc, char *argv[]) {
     __log;
 
-    const char *target;
+    const char *target, *proxy_ip = "0.0.0.0";
     short port;
 
-    if (argc < 3) {
-        puts("Usage: ./snd target listen_port");
-        logger.print("Defaulted to ptt.cc, listening at 5000");
-        target = "ptt.cc";
-        port = 5000;
+    if (argc < 4) {
+        puts("Usage: ./snd target listen_port proxy_ip");
+        puts("JIZZ"):
+        exit(0);
     } else {
         target = argv[1];
         port = (short) atoi(argv[2]);
+        proxy_ip = argv[3];
     }
 
-    icmp = icmp_socket("0.0.0.0", 8); // send ping request
+    icmp = icmp_socket(proxy_ip, 8); // send ping request
 
     sock_init();
     sock_listen(port); /* for example */
