@@ -46,6 +46,7 @@ int main() {
                 return;
             }
             icmp_snd(icmp, fd_tunnel[fd], buffer, rcv);
+			return;
         }
 
         icmp_rcv(icmp,
