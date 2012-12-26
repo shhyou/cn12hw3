@@ -8,9 +8,9 @@
 
 #include <sys/socket.h>
 #include <arpa/inet.h> // including everything in the universe
+#include <netinet/in.h>
 #include <netdb.h>
 #include <sys/types.h>
-#include <netinet/in.h>
 
 #include <linux/ip.h>
 #include <linux/icmp.h>
@@ -63,10 +63,10 @@ void unpkt_magic(pkt_t& pkt) {
         logger.raise("broken icmp message");
 }
 
-void mkpkt(pkt_t& pkt, uint32_t port, uint32_t len, const uint8_t data[ICMP_LEN]) {
+void mkpkt(pkt_t& pkt, const tunnel_t tnl, uint32_t len, const uint8_t data[ICMP_LEN]) {
     memset(&pkt, 0, sizeof(pkt));
     mkpkt_magic(pkt);
-    pkt.port = port;
+    pkt.port = tnl.port;
     pkt.load.msg.len = len;
     memcpy(pkt.load.msg.data, data, len);
 }
@@ -91,7 +91,7 @@ uint16_t check(uint16_t arr[], size_t len) {
     return (chk == 0xffff) ? chk : (chk ^ 0xffff);
 }
 
-void icmp_sendto(raw_t icmp, pkt_t& pkt) {
+void icmp_sendto(raw_t icmp, const tunnel_t tnl, pkt_t& pkt) {
     __log;
 
     struct icmp_t {
@@ -99,21 +99,26 @@ void icmp_sendto(raw_t icmp, pkt_t& pkt) {
         pkt_t pkt;
     } data;
 
+    sockaddr_in sin;
+    memset(&sin, 0, sizeof(sin));
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = tnl.dst;
+
     data.hdr.type = icmp.sndtype;
     data.hdr.code = 0;
     data.hdr.checksum = 0;
-    data.hdr.un.echo.id = getpid();
+    data.hdr.un.echo.id = tnl.echoid;
     data.hdr.un.echo.sequence = icmpseq++;
 
     data.hdr.checksum = check((uint16_t*)&data.hdr, sizeof(data.hdr));
 
     data.pkt = pkt;
 
-    if (sendto(icmp.fd, &data, sizeof(data), 0, (sockaddr*)&icmp.dst, sizeof(icmp.dst)) < 0)
+    if (sendto(icmp.fd, &data, sizeof(data), 0, (sockaddr*)&sin, sizeof(sin)) < 0)
         throw logger.errmsg("icmp_create, sendto");
 }
 
-void icmp_recvfrom(raw_t icmp, sockaddr_in& sin, uint16_t &echoid, pkt_t &pkt) {
+void icmp_recvfrom(raw_t icmp, tunnel_t& tnlin, pkt_t &pkt) {
     __log;
 
     struct icmp_t {
@@ -121,7 +126,12 @@ void icmp_recvfrom(raw_t icmp, sockaddr_in& sin, uint16_t &echoid, pkt_t &pkt) {
         icmphdr hdr;
         pkt_t pkt;
     } data;
+
+    sockaddr_in sin;
     socklen_t len = sizeof(sin);
+    memset(&sin, 0, sizeof(sin));
+
+    tnlin = tunnel_t();
 
     ssize_t rcv = recvfrom(icmp.fd, &data, sizeof(data), 0, (sockaddr*)&sin, &len);
 
@@ -131,15 +141,20 @@ void icmp_recvfrom(raw_t icmp, sockaddr_in& sin, uint16_t &echoid, pkt_t &pkt) {
     if (data.hdr.type != (icmp.sndtype^8))
         logger.raise("not ping %s", icmp.sndtype == 0 ? "reply" : "request");
 
-    if (icmp.sndtype == 0) /* echo reply */
-        if (data.hdr.un.echo.id != getpid())
+    if (icmp.sndtype == 8) { /* recv type is echo reply, i.e. sndtype is echo request */
+        if (sin.sin_addr.s_addr != icmp.defdst)
+            logger.raise("not my proxy");
+        if (data.hdr.un.echo.id != icmp.defechoid)
             logger.raise("not my pid");
+    }
 
-    echoid = data.hdr.un.echo.id;
+    tnlin.echoid = data.hdr.un.echo.id;
+    tnlin.dst = sin.sin_addr.s_addr;
     pkt = data.pkt;
 
-    logger.print("ping %s, echo id = %u, seq = %u",
+    logger.print("ping %s from %u.%u.%u.%u, echo id = %u, seq = %u",
             icmp.sndtype == 0 ? "reply" : "request",
+            (tnlin.dst)&0xff, (tnlin.dst>>8)&0xff, (tnlin.dst>>16)&0xff, (tnlin.dst>>24)&0xff,
             (uint32_t)data.hdr.un.echo.id,
             (uint32_t)data.hdr.un.echo.sequence);
 }
@@ -152,72 +167,76 @@ raw_t icmp_socket(const char *ip, uint8_t sndtype) {
     icmp.sndtype = sndtype;
     if ((icmp.fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)) < 0)
         throw logger.errmsg("raw socket");
-    icmp.dst.sin_family = AF_INET;
-    icmp.dst.sin_addr.s_addr = inet_addr(ip);
+    icmp.defdst = inet_addr(ip);
+    icmp.defechoid = getpid();
     return icmp;
 }
 
-uint32_t icmp_create(raw_t icmp, const char* dstname, unsigned short dstport) {
+tunnel_t icmp_create(raw_t icmp, const char* dstname, unsigned short dstport) {
     __log;
 
+    tunnel_t tnl;
     pkt_t pkt;
-    uint32_t port = freeport++;
+    
+    tnl.dst = icmp.defdst;
+    tnl.echoid = icmp.defechoid;
+    tnl.port = freeport;
 
-
-    mkpkt(pkt, ICMP_CREATE, port);
+    mkpkt(pkt, ICMP_CREATE, tnl.port);
     pkt.load.ctl.dstport = dstport;
     strcpy((char*)pkt.load.ctl.dstname, dstname);
 
-    icmp_sendto(icmp, pkt);
+    icmp_sendto(icmp, tnl, pkt);
 
-    return port;
+    freeport++;
+    return tnl;
 }
 
-void icmp_close(raw_t icmp, const uint32_t port) {
+void icmp_close(raw_t icmp, const tunnel_t tnl) {
     __log;
     pkt_t pkt;
-    mkpkt(pkt, ICMP_CLOSE, port);
-    icmp_sendto(icmp, pkt);
+    mkpkt(pkt, ICMP_CLOSE, tnl.port);
+    icmp_sendto(icmp, tnl, pkt);
 }
 
-void icmp_snd(raw_t icmp, uint32_t port, const void* buf, const size_t len) {
+void icmp_snd(raw_t icmp, tunnel_t tnl, const void* buf, const size_t len) {
     __log;
     pkt_t pkt;
     assert(len <= ICMP_LEN);
 
-    mkpkt(pkt, port, len, (const uint8_t*)buf);
-    icmp_sendto(icmp, pkt);
+    mkpkt(pkt, tnl, len, (const uint8_t*)buf);
+    icmp_sendto(icmp, tnl, pkt);
 }
 
 void icmp_rcv(raw_t icmp,
-        function<void(sockaddr_in, uint16_t, uint32_t, void*, size_t)> ircv,
-        function<void(sockaddr_in, uint16_t, uint32_t, const char*, uint16_t)> iaccept,
-        function<void(sockaddr_in, uint16_t, uint32_t)> iclose) {
+        function<void(tunnel_t, void*, size_t)> ircv,
+        function<void(tunnel_t, const char*, uint16_t)> iaccept,
+        function<void(tunnel_t)> iclose) {
     __log;
     
     try {
-        sockaddr_in sin;
+        tunnel_t tnl;
         pkt_t pkt;
-        uint16_t echoid;
 
-        icmp_recvfrom(icmp, sin, echoid, pkt);
+        icmp_recvfrom(icmp, tnl, pkt);
         unpkt_magic(pkt);
 
         if (pkt.port == 0) { /* control message */
+            tnl.port = pkt.load.ctl.ctlport;
             if (pkt.load.ctl.type == ICMP_CREATE) {
-                iaccept(sin, echoid, pkt.load.ctl.ctlport,
+                iaccept(tnl,
                         (const char*)pkt.load.ctl.dstname,
                         pkt.load.ctl.dstport);
             } else if (pkt.load.ctl.type == ICMP_CLOSE) {
-                iclose(sin, echoid, pkt.load.ctl.ctlport);
+                iclose(tnl);
             } else {
                 logger.raise("unknown control message");
             }
         } else { /* normal message */
-            ircv(sin, echoid, pkt.port, pkt.load.msg.data, pkt.load.msg.len);
+            ircv(tnl, pkt.load.msg.data, pkt.load.msg.len);
         }
     } catch (const string& e) {
-        logger.eprint("icmp: %s", e.c_str());
+        logger.print("Ignoring received icmp packet: %s", e.c_str());
     }
 }
 
