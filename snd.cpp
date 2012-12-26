@@ -13,7 +13,7 @@
 
 using std::map;
 
-const int sizeof_buffer = 2048;
+const int sizeof_buffer = 400; /* too large, icmp can send at most 512 bytes */
 
 raw_t icmp;
 map<int, tunnel_t> fd_tunnel;
@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
     sock_watch(icmp.fd);
 
     socke_accept = [target, target_port](int fd, sockaddr_in addr) {
-        __log;
+        __logl;
 
         sock_watch(fd);
         fd_tunnel[fd] = icmp_create(icmp, target, target_port);
@@ -76,9 +76,16 @@ int main(int argc, char *argv[]) {
                 (addr.sin_addr.s_addr>>16)&0xff, (addr.sin_addr.s_addr>>24)&0xff);
     };
 
+    socke_closed = [](int fd) {
+        icmp_close(icmp, fd_tunnel[fd]);
+        sock_unwatch(fd);
+        close(fd);
+        tunnel_fd.erase(fd_tunnel[fd]);
+        fd_tunnel.erase(fd);
+    };
 
     socke_rcv = [](int fd) {
-        __log;
+        __logl;
 
         char buffer[sizeof_buffer];
         if (fd == icmp.fd) {
@@ -93,8 +100,8 @@ int main(int argc, char *argv[]) {
             } else if (recved != 0) {
                 icmp_snd(icmp, fd_tunnel[fd], buffer, recved);
             } else {
-                icmp_close(icmp, fd_tunnel[fd]);
-                close(fd);
+                logger.eprint("Unexpected closure of fd %d", fd);
+                socke_closed(fd);
             }
 
         }

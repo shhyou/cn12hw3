@@ -14,6 +14,7 @@ using std::function;
 
 /* socket event handlers */
 EXTERN function<void(int, sockaddr_in)> socke_accept;
+EXTERN function<void(int)> socke_closed;
 EXTERN function<void(int)> socke_rcv;
 
 void sock_init(); /* call this before you modify event handler */

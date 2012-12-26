@@ -16,6 +16,7 @@ void sock_init() {
     __log;
 
     socke_accept = [](int, sockaddr_in) {};
+    socke_closed = [](int) {};
     socke_rcv = [](int) {};
 
 
@@ -53,7 +54,7 @@ void sock_watch(int fd) {
     __log;
 
     epoll_event event;
-    event.events = EPOLLIN;
+    event.events = EPOLLIN | EPOLLRDHUP;
     event.data.fd = fd;
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event) < 0)
         throw logger.errmsg("Cannot add fd to epoll");
@@ -63,7 +64,7 @@ void sock_unwatch(int fd) {
     __log;
 
     epoll_event event;
-    event.events = EPOLLIN;
+    event.events = EPOLLIN | EPOLLRDHUP;
     event.data.fd = fd;
     if (epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, &event) < 0)
         throw logger.errmsg("Cannot remove fd from epoll");
@@ -83,7 +84,10 @@ void sock_loop() {
 
             if (events[i].data.fd != listenfd) {
 
-                socke_rcv(events[i].data.fd);
+                if (events[i].events & EPOLLIN)
+                    socke_rcv(events[i].data.fd);
+                else if (events[i].events & EPOLLRDHUP)
+                    socke_closed(events[i].data.fd);
 
             } else {
 
