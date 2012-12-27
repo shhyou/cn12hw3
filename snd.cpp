@@ -13,7 +13,7 @@
 
 using std::map;
 
-const int sizeof_buffer = 400; /* too large, icmp can send at most 512 bytes */
+const int sizeof_buffer = 480; /* too large, icmp can send at most 512 bytes */
 
 raw_t icmp;
 map<int, tunnel_t> fd_tunnel;
@@ -27,7 +27,6 @@ void ircv(tunnel_t tnl, void *buf, size_t len) {
     ssize_t sent = send(fd, buf, len, 0);
     if (sent < 0)
         throw logger.errmsg("Failed to send data to fd %d", fd);
-
 }
 
 auto empty_func = [](tunnel_t, const char*, uint16_t) {};
@@ -60,7 +59,7 @@ int main(int argc, char *argv[]) {
     icmp = icmp_socket(proxy_ip, 8); // send ping request
 
     sock_init();
-    sock_listen(port); /* for example */
+    sock_listen(port);
 
     sock_watch(icmp.fd);
 
@@ -77,6 +76,8 @@ int main(int argc, char *argv[]) {
     };
 
     socke_closed = [](int fd) {
+        __logl;
+
         icmp_close(icmp, fd_tunnel[fd]);
         sock_unwatch(fd);
         close(fd);
