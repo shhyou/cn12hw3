@@ -121,12 +121,12 @@ int main() {
                     [](tunnel_t tnl) { /* iclose */
                         __logl;
 
-                        int fd = tunnel_fd[tnl];
-                        logger.print("Closing fd %d", fd);
-                        sock_unwatch(fd);
-                        close(fd);
+                        int tfd = tunnel_fd[tnl];
+                        logger.print("Closing fd %d", tfd);
+                        sock_unwatch(tfd);
+                        close(tfd);
                         tunnel_fd.erase(tnl);
-                        fd_tunnel.erase(fd);
+                        fd_tunnel.erase(tfd);
                     });
         };
 

@@ -98,7 +98,7 @@ void sock_loop() {
                     throw logger.errmsg("Cannot accept connection");
 
                 socke_accept(connfd, client_address);
-                socke_rcv(connfd);
+                //socke_rcv(connfd);  // this causes the process to block...
             }
         }
     }

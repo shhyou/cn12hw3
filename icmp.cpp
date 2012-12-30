@@ -110,12 +110,12 @@ void icmp_sendto(raw_t icmp, const tunnel_t tnl, pkt_t& pkt) {
     data.hdr.un.echo.id = tnl.echoid;
     data.hdr.un.echo.sequence = icmpseq++;
 
-    data.hdr.checksum = check((uint16_t*)&data.hdr, sizeof(data.hdr));
+    //data.hdr.checksum = check((uint16_t*)&data.hdr, sizeof(data.hdr));
 
     data.pkt = pkt;
 
     if (sendto(icmp.fd, &data, sizeof(data), 0, (sockaddr*)&sin, sizeof(sin)) < 0)
-        throw logger.errmsg("icmp_create, sendto");
+        throw logger.errmsg("icmp_sendto");
 }
 
 void icmp_recvfrom(raw_t icmp, tunnel_t& tnlin, pkt_t &pkt) {
@@ -150,6 +150,7 @@ void icmp_recvfrom(raw_t icmp, tunnel_t& tnlin, pkt_t &pkt) {
 
     tnlin.echoid = data.hdr.un.echo.id;
     tnlin.dst = sin.sin_addr.s_addr;
+    tnlin.port = data.pkt.port;
     pkt = data.pkt;
 
     logger.print("ping %s from %u.%u.%u.%u, echo id = %u, seq = %u",
