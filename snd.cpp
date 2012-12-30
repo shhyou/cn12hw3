@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
             fd_tunnel[fd] = icmp_create(icmp, target, target_port);
             tunnel_fd[fd_tunnel[fd]] = fd;
 
-            logger.print("New connection from %u.%u.%u.%u, fd=%d, icmp port=%u",
+            logger.print("New connection from %u.%u.%u.%u, fd=%d. icmp_create with port %u",
                     addr.sin_addr.s_addr&0xff, (addr.sin_addr.s_addr>>8)&0xff,
                     (addr.sin_addr.s_addr>>16)&0xff, (addr.sin_addr.s_addr>>24)&0xff,
                     fd, fd_tunnel[fd].port);

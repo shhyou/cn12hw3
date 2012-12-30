@@ -143,9 +143,9 @@ void icmp_recvfrom(raw_t icmp, tunnel_t& tnlin, pkt_t &pkt) {
 
     if (icmp.sndtype == 8) { /* recv type is echo reply, i.e. sndtype is echo request */
         if (sin.sin_addr.s_addr != icmp.defdst)
-            logger.raise("not my proxy");
+            logger.raise(" not my proxy");
         if (data.hdr.un.echo.id != icmp.defechoid)
-            logger.raise("not my pid");
+            logger.raise(" not my pid");
     }
 
     tnlin.echoid = data.hdr.un.echo.id;
