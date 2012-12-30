@@ -46,13 +46,13 @@ void logprint_t::operator()(const char *fmt, ...) const {
     buf[sizeof(buf) - 1] = 0;
 	len = vsnprintf(buf, sizeof(buf) - 1, fmt, args);
 
-    for (i = 0; i < len; i += 90) {
+    for (i = 0; i < len; i += 93) {
         fprintf(output, "\n\x1b[1;30m|    |\x1b[m ");
-        if (i+90 < len) {
-            ch = buf[i+90];
-            buf[i+90] = 0;
+        if (i+93 < len) {
+            ch = buf[i+93];
+            buf[i+93] = 0;
             fprintf(output, "%s", buf + i);
-            buf[i+90] = ch;
+            buf[i+93] = ch;
         } else {
             fprintf(output, "%s", buf + i);
         }

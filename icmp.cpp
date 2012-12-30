@@ -139,7 +139,7 @@ void icmp_recvfrom(raw_t icmp, tunnel_t& tnlin, pkt_t &pkt) {
         throw logger.errmsg("recvfrom");
 
     if (data.hdr.type != (icmp.sndtype^8))
-        logger.raise("not ping %s", icmp.sndtype == 0 ? "reply" : "request");
+        logger.raise("not ping %s", (icmp.sndtype^8) == 0 ? "reply" : "request");
 
     if (icmp.sndtype == 8) { /* recv type is echo reply, i.e. sndtype is echo request */
         if (sin.sin_addr.s_addr != icmp.defdst)
@@ -153,7 +153,7 @@ void icmp_recvfrom(raw_t icmp, tunnel_t& tnlin, pkt_t &pkt) {
     pkt = data.pkt;
 
     logger.print("ping %s from %u.%u.%u.%u, echo id = %u, seq = %u",
-            icmp.sndtype == 0 ? "reply" : "request",
+            (icmp.sndtype^8) == 0 ? "reply" : "request",
             (tnlin.dst)&0xff, (tnlin.dst>>8)&0xff, (tnlin.dst>>16)&0xff, (tnlin.dst>>24)&0xff,
             (uint32_t)data.hdr.un.echo.id,
             (uint32_t)data.hdr.un.echo.sequence);

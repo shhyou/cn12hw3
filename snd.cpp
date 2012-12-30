@@ -28,7 +28,9 @@ void ircv(tunnel_t tnl, void *buf, size_t len) {
 
     ssize_t sent = send(fd, buf, len, 0);
     if (sent < 0)
-        throw logger.errmsg("Failed to send data to fd %d", fd);
+        throw logger.errmsg("Cannot send data to fd %d", fd);
+
+    logger.print("Forward data from icmp port %u to %d", tnl.port, fd);
 }
 
 auto empty_func = [](tunnel_t, const char*, uint16_t) {};
@@ -74,9 +76,10 @@ int main(int argc, char *argv[]) {
             fd_tunnel[fd] = icmp_create(icmp, target, target_port);
             tunnel_fd[fd_tunnel[fd]] = fd;
 
-            logger.print("New connection from %u.%u.%u.%u",
+            logger.print("New connection from %u.%u.%u.%u, fd=%d, icmp port=%u",
                     addr.sin_addr.s_addr&0xff, (addr.sin_addr.s_addr>>8)&0xff,
-                    (addr.sin_addr.s_addr>>16)&0xff, (addr.sin_addr.s_addr>>24)&0xff);
+                    (addr.sin_addr.s_addr>>16)&0xff, (addr.sin_addr.s_addr>>24)&0xff,
+                    fd, fd_tunnel[fd].port);
         };
 
         socke_closed = [](int fd) {
@@ -110,10 +113,11 @@ int main(int argc, char *argv[]) {
                     socke_closed(fd);
                 }
 
+                logger.print("Forward data from %d to icmp port %u", fd, fd_tunnel[fd].port);
             }
         };
 
-        logger.print("proxy client start");
+        logger.print("proxy client start pid=%d", getpid());
         sock_loop();
     } catch (const string& e) {
         logger.eprint("Unhandled exception: %s", e.c_str());
