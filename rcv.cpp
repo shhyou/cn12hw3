@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <map>
+#include <string>
 
 #include <unistd.h>
 #include <sys/socket.h>
@@ -11,6 +12,7 @@
 #include "log.h"
 
 using std::map;
+using std::string;
 
 raw_t icmp;
 map<int, tunnel_t> fd_tunnel;
@@ -19,91 +21,116 @@ map<tunnel_t, int> tunnel_fd;
 int main() {
     __log;
 
-    icmp = icmp_socket("0.0.0.0", 0); /* ping reply */
+    try {
+        icmp = icmp_socket("0.0.0.0", 0); /* ping reply */
 
-    sock_init();
-    sock_watch(icmp.fd);
+        sock_init();
+        sock_watch(icmp.fd);
 
-    socke_closed = [](int fd) {
-        icmp_close(icmp, fd_tunnel[fd]);
-        sock_unwatch(fd);
-        close(fd);
-        tunnel_fd.erase(fd_tunnel[fd]);
-        fd_tunnel.erase(fd);
-    };
+        socke_closed = [](int fd) {
+            icmp_close(icmp, fd_tunnel[fd]);
+            sock_unwatch(fd);
+            close(fd);
+            tunnel_fd.erase(fd_tunnel[fd]);
+            fd_tunnel.erase(fd);
+        };
 
-    socke_rcv = [](int fd) {
-        __logl;
+        socke_rcv = [](int fd) {
+            __logl;
 
-        char buffer[2048];
-        if (fd != icmp.fd) {
-            ssize_t rcv = recv(fd, buffer, 480, 0);
-            if (rcv < 0)
-                throw logger.errmsg("received jizz from port %d", fd_tunnel[fd].port);
-            if (rcv == 0) {
-                logger.eprint("Unexpected closure of fd %d", fd);
-                socke_closed(fd);
+            char buffer[2048];
+            if (fd != icmp.fd) {
+                ssize_t rcv = recv(fd, buffer, 480, 0);
+                if (rcv < 0)
+                    throw logger.errmsg("received jizz from port %d", fd_tunnel[fd].port);
+                if (rcv == 0) {
+                    logger.eprint("Unexpected closure of fd %d", fd);
+                    socke_closed(fd);
+                    return;
+                }
+                icmp_snd(icmp, fd_tunnel[fd], buffer, rcv);
                 return;
             }
-            icmp_snd(icmp, fd_tunnel[fd], buffer, rcv);
-			return;
-        }
 
-        icmp_rcv(icmp,
-                [](tunnel_t tnl, void* buf, size_t len) { /* ircv */
-                    __logl;
+            icmp_rcv(icmp,
+                    [](tunnel_t tnl, void* buf, size_t len) { /* ircv */
+                       __logl;
 
-                    int tfd = tunnel_fd[tnl];
+                        int tfd = tunnel_fd[tnl];
 
-                    ssize_t sent = send(tfd, buf, len, 0);
-                    if (sent < 0)
-                        throw logger.errmsg("Failed to send data to fd %d", tfd);
-                },
+                        ssize_t sent = send(tfd, buf, len, 0);
+                        if (sent < 0)
+                            throw logger.errmsg("Failed to send data to fd %d", tfd);
+                    },
 
-                [](tunnel_t tnl, const char* name, uint16_t port) { /* iaccept */
-                    __logl;
+                    [](tunnel_t tnl, const char* name, uint16_t port) { /* iaccept */
+                        __logl;
 
-                    sockaddr_in sin;
-                    hostent *h;
-                    memset(&sin, 0, sizeof(sin));
+                        sockaddr_in sin;
+                        hostent *h;
+                        memset(&sin, 0, sizeof(sin));
 
-                    h = gethostbyname(name);
-                    if (h == NULL)
-                        throw logger.errmsg("Cannot get IP of %s", name);
-                    
-                    sin.sin_family = AF_INET;
-                    sin.sin_port = port;
-                    sin.sin_addr.s_addr = *(in_addr_t*)h->h_addr_list[0];
+                        h = gethostbyname(name);
+                        if (h == NULL)
+                            throw logger.errmsg("Cannot get IP of %s", name);
 
-                    int s = socket(AF_INET, SOCK_STREAM, 0);
-                    if (s < 0)
-                        throw logger.errmsg("Cannot create new socket");
+                        sin.sin_family = AF_INET;
+                        sin.sin_port = port;
+                        sin.sin_addr.s_addr = *(in_addr_t*)h->h_addr_list[0];
 
-                    if (connect(s, (sockaddr*)&sin, sizeof(sin)) < 0) {
-                        close(s);
-                        throw logger.errmsg("Cannot connectto %s:%u", name, (uint32_t)port);
-                    }
+                        int s = socket(AF_INET, SOCK_STREAM, 0);
+                        if (s < 0)
+                            throw logger.errmsg("Cannot create new socket");
 
-                    sock_watch(s);
+                        if (connect(s, (sockaddr*)&sin, sizeof(sin)) < 0) {
+                            close(s);
+                            throw logger.errmsg("Cannot connectto %s(%d.%d.%d.%d):%u, fd=%d",
+                                name,
+                                sin.sin_addr.s_addr&0xff,
+                                (sin.sin_addr.s_addr>>8)&0xff,
+                                (sin.sin_addr.s_addr>>16)&0xff,
+                                (sin.sin_addr.s_addr>>24)&0xff,
+                                (uint32_t)port,
+                                s);
+                        }
 
-                    fd_tunnel[s] = tnl;
-                    tunnel_fd[tnl] = s;
+                        sock_watch(s);
 
-                    logger.print("New connection to %s:%u", name, (uint32_t)port);
-                },
+                        fd_tunnel[s] = tnl;
+                        tunnel_fd[tnl] = s;
 
-                [](tunnel_t tnl) { /* iclose */
-                    socke_closed(tunnel_fd[tnl]);
-                });
-    };
+                        logger.print("New connection to %s(%d.%d.%d.%d):%u, fd=%d",
+                                name,
+                                sin.sin_addr.s_addr&0xff,
+                                (sin.sin_addr.s_addr>>8)&0xff,
+                                (sin.sin_addr.s_addr>>16)&0xff,
+                                (sin.sin_addr.s_addr>>24)&0xff,
+                                (uint32_t)port,
+                                s);
+                    },
 
-    socke_accept = [](int, sockaddr_in) {
-        __logl;
-        logger.eprint("WTF");
-    };
+                    [](tunnel_t tnl) { /* iclose */
+                        __logl;
 
-    logger.print("proxy server start");
-    sock_loop();
+                        int fd = tunnel_fd[tnl];
+                        logger.print("Closing fd %d", fd);
+                        sock_unwatch(fd);
+                        close(fd);
+                        tunnel_fd.erase(tnl);
+                        fd_tunnel.erase(fd);
+                    });
+        };
+
+        socke_accept = [](int, sockaddr_in) {
+            __logl;
+            logger.eprint("WTF");
+        };
+
+        logger.print("proxy server start");
+        sock_loop();
+    } catch (const string& e) {
+        logger.eprint("Unhandled exception: %s", e.c_str());
+    }
     sock_final();
     return 0;
 }

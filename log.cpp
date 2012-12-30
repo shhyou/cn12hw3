@@ -30,9 +30,11 @@ string strerrmsg(const char *fmt, va_list args, const char *err_str) {
 
 logprint_t::logprint_t(const char *_type, FILE *_output) : type(_type), output(_output) {}
 void logprint_t::operator()(const char *fmt, ...) const {
-	static char buf[64];
+	static char buf[256];
 	va_list args;
 	time_t tm = time(NULL);
+    int len, i;
+    char ch;
 
 	va_start(args, fmt);
 	strftime(buf, sizeof(buf), "%Y%m%d %a %H:%M:%S", localtime(&tm));
@@ -40,11 +42,24 @@ void logprint_t::operator()(const char *fmt, ...) const {
 	fprintf(output, "[%s] ", type);
 	fprintf(output, "[\x1b[1;33m%s\x1b[m] ", buf);
 	fprintf(output, "\x1b[1;30m%s\x1b[m", stktrace().c_str());
-	fprintf(output, "\n\x1b[1;30m|    |\x1b[m ");
-	vfprintf(output, fmt, args);
-	fprintf(output, "\n");
 
-	va_end(args);
+    buf[sizeof(buf) - 1] = 0;
+	len = vsnprintf(buf, sizeof(buf) - 1, fmt, args);
+
+    for (i = 0; i < len; i += 70) {
+        fprintf(output, "\n\x1b[1;30m|    |\x1b[m ");
+        if (i+70 < len) {
+            ch = buf[i+90];
+            buf[i+90] = 0;
+            fprintf(output, "%s", buf + i);
+            buf[i+90] = ch;
+        } else {
+            fprintf(output, "%s", buf + i);
+        }
+    }
+
+	fprintf(output, "\n");
+    va_end(args);
 }
 
 log_t::log_t(const char* t, const char* s)
